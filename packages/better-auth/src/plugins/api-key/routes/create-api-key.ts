@@ -406,7 +406,7 @@ export function createApiKey({
 					? JSON.stringify(defaultPermissions)
 					: undefined;
 
-			const data = {
+			const data: Omit<ApiKey, "id"> = {
 				...extra,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -438,7 +438,7 @@ export function createApiKey({
 				requestCount: 0,
 				// @ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
-			} satisfies Omit<ApiKey, "id">;
+			};
 
 			if (metadata) {
 				// The adapter will automatically apply the schema transform to stringify
