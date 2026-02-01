@@ -4,6 +4,7 @@ import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
+import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
@@ -15,7 +16,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-const updateApiKeyBodySchema = z.object({
+const baseUpdateApiKeyBodySchema = z.object({
 	keyId: z.string().meta({
 		description: "The id of the Api Key",
 	}),
@@ -107,11 +108,18 @@ export function updateApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: opts.schema?.apikey?.additionalFields || {},
+		isClientSide: true,
+	});
+	const bodySchema = baseUpdateApiKeyBodySchema.extend(
+		additionalFieldsSchema.partial().shape,
+	);
 	return createAuthEndpoint(
 		"/api-key/update",
 		{
 			method: "POST",
-			body: updateApiKeyBodySchema,
+			body: bodySchema,
 			metadata: {
 				openapi: {
 					description: "Update an existing API key by ID",
@@ -250,6 +258,7 @@ export function updateApiKey({
 			},
 		},
 		async (ctx) => {
+			const extra = additionalFieldsSchema.partial().parse(ctx.body);
 			const {
 				keyId,
 				expiresIn,
@@ -309,7 +318,9 @@ export function updateApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			const newValues: Partial<ApiKey> = {};
+			const newValues: Partial<ApiKey> & typeof extra = {
+				...extra,
+			};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {

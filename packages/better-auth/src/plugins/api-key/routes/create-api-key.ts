@@ -5,6 +5,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
+import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
@@ -13,7 +14,7 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-const createApiKeyBodySchema = z.object({
+const baseCreateApiKeyBodySchema = z.object({
 	name: z.string().meta({ description: "Name of the Api Key" }).optional(),
 	expiresIn: z
 		.number()
@@ -111,11 +112,18 @@ export function createApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: opts.schema?.apikey?.additionalFields || {},
+		isClientSide: true,
+	});
+	const bodySchema = baseCreateApiKeyBodySchema.extend(
+		additionalFieldsSchema.shape,
+	);
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
-			body: createApiKeyBodySchema,
+			body: bodySchema,
 			metadata: {
 				openapi: {
 					description: "Create a new API key for a user",
@@ -256,6 +264,7 @@ export function createApiKey({
 			},
 		},
 		async (ctx) => {
+			const extra = additionalFieldsSchema.parse(ctx.body);
 			const {
 				name,
 				expiresIn,
@@ -397,7 +406,8 @@ export function createApiKey({
 					? JSON.stringify(defaultPermissions)
 					: undefined;
 
-			const data: Omit<ApiKey, "id"> = {
+			const data = {
+				...extra,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -426,9 +436,9 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-expect-error - we intentionally save the permissions as string on DB.
+				// @ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
-			};
+			} satisfies Omit<ApiKey, "id">;
 
 			if (metadata) {
 				// The adapter will automatically apply the schema transform to stringify

@@ -1,12 +1,17 @@
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import { parseJSON } from "../../client/parser";
 
 export const apiKeySchema = ({
 	timeWindow,
 	rateLimitMax,
+	additionalFields,
 }: {
 	timeWindow: number;
 	rateLimitMax: number;
+	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 }) =>
 	({
 		apikey: {
@@ -193,6 +198,7 @@ export const apiKeySchema = ({
 						},
 					},
 				},
+				...(additionalFields || {}),
 			},
 		},
 	}) satisfies BetterAuthPluginDBSchema;

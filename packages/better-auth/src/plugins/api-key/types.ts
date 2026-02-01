@@ -3,10 +3,19 @@ import type {
 	GenericEndpointContext,
 	HookEndpointContext,
 } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
+
+export type ApiKeySchema = InferOptionSchema<
+	ReturnType<typeof apiKeySchema>
+> & {
+	apikey?: {
+		additionalFields?: Record<string, DBFieldAttribute> | undefined;
+	};
+};
 
 export interface ApiKeyOptions {
 	/**
@@ -188,7 +197,7 @@ export interface ApiKeyOptions {
 	/**
 	 * custom schema for the API key plugin
 	 */
-	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>> | undefined;
+	schema?: ApiKeySchema | undefined;
 	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *

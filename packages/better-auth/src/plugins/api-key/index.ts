@@ -79,6 +79,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		apiKeySchema({
 			rateLimitMax: opts.rateLimit.maxRequests,
 			timeWindow: opts.rateLimit.timeWindow,
+			additionalFields: opts.schema?.apikey?.additionalFields,
 		}),
 		opts.schema,
 	);
