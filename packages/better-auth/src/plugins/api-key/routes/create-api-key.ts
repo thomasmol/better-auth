@@ -95,6 +95,8 @@ const baseCreateApiKeyBodySchema = z.object({
 		.optional(),
 });
 
+type CreateApiKeyBody = Partial<z.infer<typeof baseCreateApiKeyBodySchema>>;
+
 export function createApiKey({
 	keyGenerator,
 	opts,
@@ -125,6 +127,9 @@ export function createApiKey({
 			method: "POST",
 			body: bodySchema,
 			metadata: {
+				$Infer: {
+					body: {} as CreateApiKeyBody,
+				},
 				openapi: {
 					description: "Create a new API key for a user",
 					responses: {
