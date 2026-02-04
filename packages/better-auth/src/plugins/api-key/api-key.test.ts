@@ -33,7 +33,7 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should fail to create API keys from client without headers", async () => {
-		const apiKeyFail = await client.apiKey.create({});
+		const apiKeyFail = await client.apiKey.create();
 
 		expect(apiKeyFail.data).toBeNull();
 		expect(apiKeyFail.error).toBeDefined();
