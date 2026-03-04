@@ -4,7 +4,6 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
-import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
@@ -15,7 +14,7 @@ import {
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
+import type { ApiKey } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
@@ -126,10 +125,7 @@ export function updateApiKey({
 		isClientSide: true,
 	});
 
-	type Body = Partial<
-		InferAdditionalFieldsFromPluginOptions<"apikey", ApiKeyOptions>
-	> &
-		z.infer<typeof updateApiKeyBodySchema>;
+	type Body = z.infer<typeof updateApiKeyBodySchema> & Record<string, unknown>;
 
 	return createAuthEndpoint(
 		"/api-key/update",
@@ -299,6 +295,7 @@ export function updateApiKey({
 				rateLimitEnabled,
 				rateLimitTimeWindow,
 				rateLimitMax,
+				userId: _userId,
 				...additionalFieldValues
 			} = ctx.body;
 

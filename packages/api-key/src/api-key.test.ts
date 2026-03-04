@@ -4437,6 +4437,44 @@ describe("api-key", async () => {
 	});
 });
 
+describe("api-key additionalFields reserved names", () => {
+	it("should throw when a reserved field name is used", () => {
+		expect(() =>
+			apiKey({
+				schema: {
+					apikey: {
+						additionalFields: {
+							userId: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+				},
+			}),
+		).toThrow(/reserved/);
+	});
+
+	it("should throw for other reserved field names", () => {
+		for (const name of ["organizationId", "name", "prefix", "permissions"]) {
+			expect(() =>
+				apiKey({
+					schema: {
+						apikey: {
+							additionalFields: {
+								[name]: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			).toThrow(/reserved/);
+		}
+	});
+});
+
 describe("api-key additionalFields", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance(
 		{

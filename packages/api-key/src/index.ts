@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { BetterAuthError } from "better-auth";
@@ -11,13 +12,40 @@ import type { PredefinedApiKeyOptions } from "./routes";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
-import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
+import type {
+	ApiKeyConfigurationOptions,
+	ApiKeyOptions,
+	InferApiKey,
+} from "./types";
 import { getDate, getIp } from "./utils";
+
+export type ApiKeyEndpoints = ReturnType<typeof createApiKeyRoutes>;
+
+export type DefaultApiKeyPlugin<O extends ApiKeyOptions> = {
+	id: "api-key";
+	endpoints: ApiKeyEndpoints;
+	schema: BetterAuthPluginDBSchema;
+	$Infer: {
+		ApiKey: InferApiKey<O>;
+	};
+	$ERROR_CODES: typeof API_KEY_ERROR_CODES;
+	options: NoInfer<O>;
+};
+
+export interface ApiKeyPluginCreator {
+	<O extends ApiKeyOptions>(
+		configurations?:
+			| (ApiKeyConfigurationOptions & O)
+			| ApiKeyConfigurationOptions[]
+			| undefined,
+		options?: O | undefined,
+	): DefaultApiKeyPlugin<O>;
+}
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"api-key": {
-			creator: typeof apiKey;
+			creator: ApiKeyPluginCreator;
 		};
 	}
 }
@@ -36,12 +64,19 @@ export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export function apiKey(
-	_configurations?:
-		| (ApiKeyConfigurationOptions & ApiKeyOptions)
+export function apiKey<O extends ApiKeyOptions>(
+	configurations?:
+		| (ApiKeyConfigurationOptions & O)
 		| ApiKeyConfigurationOptions[]
 		| undefined,
-	_options?: ApiKeyOptions | undefined,
+	options?: O | undefined,
+): DefaultApiKeyPlugin<O>;
+export function apiKey<O extends ApiKeyOptions>(
+	_configurations?:
+		| (ApiKeyConfigurationOptions & O)
+		| ApiKeyConfigurationOptions[]
+		| undefined,
+	_options?: O | undefined,
 ) {
 	if (Array.isArray(_configurations) && _configurations.length > 0) {
 		if (!_configurations.every((option) => option.configId)) {
@@ -57,13 +92,42 @@ export function apiKey(
 		}
 	}
 
-	const options: ApiKeyOptions = _options ?? {
+	const options = (_options ?? {
 		schema: Array.isArray(_configurations)
 			? undefined
-			: (_configurations as ApiKeyOptions | undefined)?.schema,
-	};
+			: (_configurations as O | undefined)?.schema,
+	}) as O;
 
 	const additionalFields = options.schema?.apikey?.additionalFields;
+
+	const RESERVED_FIELD_NAMES = new Set([
+		"userId",
+		"organizationId",
+		"configId",
+		"name",
+		"prefix",
+		"expiresIn",
+		"remaining",
+		"metadata",
+		"refillAmount",
+		"refillInterval",
+		"rateLimitTimeWindow",
+		"rateLimitMax",
+		"rateLimitEnabled",
+		"permissions",
+		"keyId",
+		"enabled",
+	]);
+
+	if (additionalFields) {
+		for (const fieldName of Object.keys(additionalFields)) {
+			if (RESERVED_FIELD_NAMES.has(fieldName)) {
+				throw new BetterAuthError(
+					`Additional field name "${fieldName}" is reserved and cannot be used in the api-key plugin's additionalFields.`,
+				);
+			}
+		}
+	}
 
 	const configurations = [
 		...(Array.isArray(_configurations)
@@ -167,6 +231,9 @@ export function apiKey(
 	return {
 		id: "api-key",
 		$ERROR_CODES: API_KEY_ERROR_CODES,
+		$Infer: {
+			ApiKey: {} as InferApiKey<O>,
+		},
 		hooks: {
 			before: [
 				{
@@ -385,7 +452,11 @@ export function apiKey(
 		},
 		schema,
 		configurations,
-	} satisfies BetterAuthPlugin & { configurations: PredefinedApiKeyOptions[] };
+		options: options as NoInfer<O>,
+	} satisfies BetterAuthPlugin & {
+		configurations: PredefinedApiKeyOptions[];
+		options: NoInfer<O>;
+	};
 }
 
 export type * from "./types";

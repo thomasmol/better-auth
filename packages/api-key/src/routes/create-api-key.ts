@@ -5,7 +5,6 @@ import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
-import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
@@ -13,7 +12,7 @@ import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
+import type { ApiKey } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
@@ -136,8 +135,7 @@ export function createApiKey({
 		isClientSide: true,
 	});
 
-	type Body = InferAdditionalFieldsFromPluginOptions<"apikey", ApiKeyOptions> &
-		z.input<typeof createApiKeyBodySchema>;
+	type Body = z.input<typeof createApiKeyBodySchema> & Record<string, unknown>;
 
 	return createAuthEndpoint(
 		"/api-key/create",
@@ -303,6 +301,8 @@ export function createApiKey({
 				rateLimitMax,
 				rateLimitTimeWindow,
 				rateLimitEnabled,
+				userId: _userId,
+				organizationId: _organizationId,
 				...additionalFieldValues
 			} = ctx.body;
 
@@ -342,14 +342,15 @@ export function createApiKey({
 
 			if (referencesType === "organization") {
 				// Organization-owned API keys
-				const orgId = ctx.body.organizationId;
+				const orgId = ctx.body.organizationId as string | undefined;
 				if (!orgId) {
 					const msg = ERROR_CODES.ORGANIZATION_ID_REQUIRED;
 					throw APIError.from("BAD_REQUEST", msg);
 				}
 
 				// Get user ID from session or body
-				const userId = session?.user.id || ctx.body.userId;
+				const userId =
+					session?.user.id || (ctx.body.userId as string | undefined);
 				if (!userId) {
 					throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 				}
@@ -367,7 +368,7 @@ export function createApiKey({
 					}
 					referenceId = session.user.id;
 				} else {
-					const ctxUserId = ctx.body.userId;
+					const ctxUserId = ctx.body.userId as string | undefined;
 					const sessionUserId = session?.user.id;
 					if (!sessionUserId && !ctxUserId) {
 						const msg = ERROR_CODES.UNAUTHORIZED_SESSION;
@@ -470,7 +471,7 @@ export function createApiKey({
 
 			const resolvedConfigId = opts.configId ?? "default";
 
-			const data: Omit<ApiKey, "id"> = {
+			const data = {
 				configId: resolvedConfigId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -500,10 +501,9 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 				...additionalFieldValues,
-			};
+			} as Omit<ApiKey, "id"> & Record<string, unknown>;
 
 			if (metadata) {
 				// The adapter will automatically apply the schema transform to stringify

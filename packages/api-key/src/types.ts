@@ -5,6 +5,10 @@ import type {
 	LiteralString,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import type {
+	FieldAttributeToObject,
+	RemoveFieldsWithReturnedFalse,
+} from "better-auth/db";
 import type { Statements } from "better-auth/plugins/access";
 import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
@@ -413,3 +417,21 @@ export type ApiKey = {
 		  } | null)
 		| undefined;
 };
+
+type InferAdditionalFieldsOutput<
+	O extends ApiKeyOptions,
+	isClientSide extends boolean,
+> = O["schema"] extends {
+	apikey?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
+}
+	? isClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
+export type InferApiKey<
+	O extends ApiKeyOptions,
+	isClientSide extends boolean = true,
+> = ApiKey & InferAdditionalFieldsOutput<O, isClientSide>;

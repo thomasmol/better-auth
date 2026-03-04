@@ -3,7 +3,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import type { apiKey } from ".";
 import { API_KEY_ERROR_CODES } from "./error-codes";
-import type { ApiKeyOptions } from "./types";
+import type { ApiKeyOptions, InferApiKey } from "./types";
 
 export * from "./error-codes";
 
@@ -25,6 +25,11 @@ export const apiKeyClient = <CO extends ApiKeyClientOptions>(
 	return {
 		id: "api-key",
 		$InferServerPlugin: {} as ReturnType<typeof apiKey>,
+		getActions: () => ({
+			$Infer: {
+				ApiKey: {} as InferApiKey<CO>,
+			},
+		}),
 		pathMethods: {
 			"/api-key/create": "POST",
 			"/api-key/delete": "POST",
