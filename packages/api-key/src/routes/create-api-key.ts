@@ -1,16 +1,19 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
@@ -114,6 +117,7 @@ export function createApiKey({
 	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
+	additionalFields,
 }: {
 	defaultKeyGenerator: (options: {
 		length: number;
@@ -125,13 +129,28 @@ export function createApiKey({
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
+	additionalFields?: Record<string, DBFieldAttribute>;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: additionalFields || {},
+		isClientSide: true,
+	});
+
+	type Body = InferAdditionalFieldsFromPluginOptions<"apikey", ApiKeyOptions> &
+		z.input<typeof createApiKeyBodySchema>;
+
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
-			body: createApiKeyBodySchema,
+			body: z.object({
+				...createApiKeyBodySchema.shape,
+				...additionalFieldsSchema.shape,
+			}),
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					description: "Create a new API key for a user",
 					responses: {
@@ -284,6 +303,7 @@ export function createApiKey({
 				rateLimitMax,
 				rateLimitTimeWindow,
 				rateLimitEnabled,
+				...additionalFieldValues
 			} = ctx.body;
 
 			const opts = resolveConfiguration(ctx.context, configurations, configId);
@@ -482,6 +502,7 @@ export function createApiKey({
 				requestCount: 0,
 				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
+				...additionalFieldValues,
 			};
 
 			if (metadata) {

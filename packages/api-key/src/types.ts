@@ -4,12 +4,41 @@ import type {
 	HookEndpointContext,
 	LiteralString,
 } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Statements } from "better-auth/plugins/access";
 import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
 
 export interface ApiKeyOptions {
-	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>> | undefined;
+	schema?:
+		| (InferOptionSchema<ReturnType<typeof apiKeySchema>> & {
+				apikey?: {
+					/**
+					 * Additional fields to add to the API key table.
+					 *
+					 * These fields will be persisted to the database, accepted as input in
+					 * create/update endpoints, and returned in API responses.
+					 *
+					 * @example
+					 * ```ts
+					 * additionalFields: {
+					 *   environment: {
+					 *     type: "string",
+					 *     required: true,
+					 *   },
+					 *   description: {
+					 *     type: "string",
+					 *     required: false,
+					 *   },
+					 * }
+					 * ```
+					 */
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+		  })
+		| undefined;
 }
 
 export interface ApiKeyConfigurationOptions {

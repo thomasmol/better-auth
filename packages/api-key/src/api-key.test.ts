@@ -4436,3 +4436,142 @@ describe("api-key", async () => {
 		});
 	});
 });
+
+describe("api-key additionalFields", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				apiKey({
+					enableMetadata: true,
+					schema: {
+						apikey: {
+							additionalFields: {
+								environment: {
+									type: "string",
+									required: true,
+								},
+								description: {
+									type: "string",
+									required: false,
+								},
+								secret: {
+									type: "string",
+									required: false,
+									returned: false,
+								},
+							},
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+
+	const { headers } = await signInWithTestUser();
+
+	it("should create an api key with additional fields", async () => {
+		const result = (await auth.api.createApiKey({
+			body: {
+				environment: "production",
+				description: "my test key",
+			} as any,
+			headers,
+		})) as any;
+
+		expect(result.environment).toBe("production");
+		expect(result.description).toBe("my test key");
+	});
+
+	it("should require required additional fields", async () => {
+		let error: any = null;
+		try {
+			await auth.api.createApiKey({
+				body: {} as any,
+				headers,
+			});
+		} catch (e) {
+			error = e;
+		}
+		expect(error).toBeDefined();
+	});
+
+	it("should allow optional additional fields to be omitted", async () => {
+		const result = (await auth.api.createApiKey({
+			body: {
+				environment: "staging",
+			} as any,
+			headers,
+		})) as any;
+
+		expect(result.environment).toBe("staging");
+		expect(result.description).toBeNull();
+	});
+
+	it("should return additional fields in get", async () => {
+		const created = await auth.api.createApiKey({
+			body: {
+				environment: "dev",
+				description: "get test",
+			} as any,
+			headers,
+		});
+
+		const fetched = (await auth.api.getApiKey({
+			query: { id: created.id },
+			headers,
+		})) as any;
+
+		expect(fetched.environment).toBe("dev");
+		expect(fetched.description).toBe("get test");
+	});
+
+	it("should return additional fields in list", async () => {
+		const result = await auth.api.listApiKeys({
+			headers,
+		});
+
+		expect(result.apiKeys.length).toBeGreaterThan(0);
+		for (const key of result.apiKeys) {
+			expect((key as any).environment).toBeDefined();
+		}
+	});
+
+	it("should update additional fields", async () => {
+		const created = await auth.api.createApiKey({
+			body: {
+				environment: "test",
+				description: "before update",
+			} as any,
+			headers,
+		});
+
+		const updated = (await auth.api.updateApiKey({
+			body: {
+				keyId: created.id,
+				description: "after update",
+			} as any,
+			headers,
+		})) as any;
+
+		expect(updated.description).toBe("after update");
+		expect(updated.environment).toBe("test");
+	});
+
+	it("should store fields with returned: false in the database", async () => {
+		const result = (await auth.api.createApiKey({
+			body: {
+				environment: "prod",
+				secret: "super-secret-value",
+			} as any,
+			headers,
+		})) as any;
+
+		expect(result.environment).toBe("prod");
+		expect(result.secret).toBe("super-secret-value");
+	});
+});

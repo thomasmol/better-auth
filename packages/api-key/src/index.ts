@@ -63,6 +63,8 @@ export function apiKey(
 			: (_configurations as ApiKeyOptions | undefined)?.schema,
 	};
 
+	const additionalFields = options.schema?.apikey?.additionalFields;
+
 	const configurations = [
 		...(Array.isArray(_configurations)
 			? _configurations
@@ -116,6 +118,7 @@ export function apiKey(
 				(configurations.length === 1
 					? configurations[0]?.rateLimit.timeWindow
 					: undefined) ?? 1000 * 60 * 60 * 24,
+			additionalFields,
 		}),
 		options.schema,
 	);
@@ -158,6 +161,7 @@ export function apiKey(
 		defaultKeyGenerator,
 		configurations,
 		schema,
+		additionalFields,
 	});
 
 	return {

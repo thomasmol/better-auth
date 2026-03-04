@@ -1,8 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
@@ -12,7 +15,7 @@ import {
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
@@ -108,6 +111,7 @@ export function updateApiKey({
 	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
+	additionalFields,
 }: {
 	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
@@ -115,13 +119,35 @@ export function updateApiKey({
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
+	additionalFields?: Record<string, DBFieldAttribute>;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: additionalFields || {},
+		isClientSide: true,
+	});
+
+	type Body = Partial<
+		InferAdditionalFieldsFromPluginOptions<"apikey", ApiKeyOptions>
+	> &
+		z.infer<typeof updateApiKeyBodySchema>;
+
 	return createAuthEndpoint(
 		"/api-key/update",
 		{
 			method: "POST",
-			body: updateApiKeyBodySchema,
+			body: z.object({
+				...updateApiKeyBodySchema.shape,
+				...Object.fromEntries(
+					Object.entries(additionalFieldsSchema.shape).map(([key, value]) => [
+						key,
+						(value as z.ZodType).optional(),
+					]),
+				),
+			}),
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					description: "Update an existing API key by ID",
 					responses: {
@@ -273,6 +299,7 @@ export function updateApiKey({
 				rateLimitEnabled,
 				rateLimitTimeWindow,
 				rateLimitMax,
+				...additionalFieldValues
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
@@ -425,6 +452,12 @@ export function updateApiKey({
 			if (permissions !== undefined) {
 				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.permissions = JSON.stringify(permissions);
+			}
+
+			for (const [key, value] of Object.entries(additionalFieldValues)) {
+				if (value !== undefined) {
+					(newValues as Record<string, unknown>)[key] = value;
+				}
 			}
 
 			if (Object.keys(newValues).length === 0) {
